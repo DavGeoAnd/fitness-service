@@ -1,0 +1,26 @@
+version: '3.9'
+services:
+  fitness-service:
+    image: fitness-service:latest
+    container_name: fitness-service
+    hostname: local
+    env_file:
+      - otel.env
+      - service.env
+    ports:
+      - "10000:10000"
+    networks:
+      - influxdb-bridge-network
+      - arangodb-bridge-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+networks:
+  influxdb-bridge-network:
+    name: influxdb-bridge
+    external: true
+  arangodb-bridge-network:
+    name: arangodb-bridge
+    external: true
