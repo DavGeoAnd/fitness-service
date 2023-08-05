@@ -15,6 +15,7 @@ public class Audit extends Event {
     private String method;
     private String response;
     private Float requestDuration;
+    private String traceId;
 
     @Override
     public Point toPoint() {
@@ -24,6 +25,7 @@ public class Audit extends Event {
                 .addTag("method", method)
                 .addField("response", response)
                 .addField("requestDuration", requestDuration)
+                .addField("traceId", traceId)
                 .time(time, WritePrecision.MS);
     }
 }

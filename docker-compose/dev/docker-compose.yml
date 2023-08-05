@@ -7,20 +7,22 @@ services:
     env_file:
       - otel.env
       - service.env
+    expose:
+      - "10001"
     ports:
-      - "10000:10000"
+      - "10001:10000"
     networks:
-      - influxdb-bridge-network
-      - arangodb-bridge-network
+      - app-bridge-network
+      - monitoring-bridge-network
     deploy:
       resources:
         limits:
           memory: 1G
 
 networks:
-  influxdb-bridge-network:
-    name: influxdb-bridge
+  app-bridge-network:
+    name: app-bridge
     external: true
-  arangodb-bridge-network:
-    name: arangodb-bridge
+  monitoring-bridge-network:
+    name: monitoring-bridge
     external: true

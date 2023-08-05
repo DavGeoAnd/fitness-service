@@ -2,7 +2,6 @@ package com.davgeoand.api.monitor.event.handler;
 
 
 import com.davgeoand.api.ServiceProperties;
-import com.davgeoand.api.exception.InvalidEventHandlerType;
 import com.davgeoand.api.exception.MissingPropertyException;
 import com.davgeoand.api.monitor.event.type.Event;
 import lombok.AccessLevel;
@@ -17,14 +16,14 @@ public class ServiceEventHandler {
 
     static EventHandler eventHandler;
 
-    public static void init() throws InvalidEventHandlerType {
+    public static void init() {
         String eventHandlerType = ServiceProperties.getProperty("service.event.type").orElseThrow(() -> new MissingPropertyException("service.event.type"));
         switch (eventHandlerType) {
             case "log" -> eventHandler = new LogEventHandler();
             case "influxdb" -> eventHandler = new InfluxDBEventHandler();
             default -> {
-                log.error("Issue creating EventHandler");
-                throw new InvalidEventHandlerType(eventHandlerType);
+                log.error("Invalid EventHandler type. Defaulting to LogEventHandler");
+                eventHandler = new LogEventHandler();
             }
         }
         Thread eventHandlerThread = new Thread(eventHandler);

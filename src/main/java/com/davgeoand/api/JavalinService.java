@@ -5,17 +5,20 @@ import com.davgeoand.api.controller.ApiController;
 import com.davgeoand.api.controller.StepConnectionController;
 import com.davgeoand.api.controller.StepController;
 import com.davgeoand.api.controller.UserController;
+import com.davgeoand.api.exception.DocumentNotFoundException;
 import com.davgeoand.api.exception.MissingPropertyException;
 import com.davgeoand.api.monitor.event.handler.ServiceEventHandler;
 import com.davgeoand.api.monitor.event.type.Audit;
 import com.davgeoand.api.monitor.event.type.ServiceStart;
-import com.davgeoand.api.monitor.metric.ServiceMetrics;
+import com.davgeoand.api.monitor.metric.ServiceMetricRegistry;
 import io.javalin.Javalin;
 import io.javalin.apibuilder.EndpointGroup;
-import io.javalin.config.JavalinConfig;
 import io.javalin.event.EventListener;
+import io.javalin.http.ExceptionHandler;
 import io.javalin.http.HandlerType;
 import io.javalin.http.HttpStatus;
+import io.javalin.http.RequestLogger;
+import io.opentelemetry.api.trace.Span;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.management.ManagementFactory;
@@ -25,41 +28,54 @@ import static io.javalin.apibuilder.ApiBuilder.path;
 
 @Slf4j
 public class JavalinService {
-    private final Javalin service;
+    private Javalin service;
+    private final long serviceInitDuration;
     private long startServiceTime;
 
     public JavalinService() {
         log.info("Initializing javalin web service");
-        ServiceProperties.init("service.properties", "build.properties");
-        service = createJavalinService();
+        long serviceInitTime = System.currentTimeMillis();
+        createJavalinService();
+        serviceInitDuration = System.currentTimeMillis() - serviceInitTime;
         log.info("Successfully initialized javalin web service");
     }
 
     public void start() {
         log.info("Starting javalin web service");
+        startServiceTime = System.currentTimeMillis();
         service.start(Integer.parseInt(ServiceProperties.getProperty("service.port").orElseThrow(() -> new MissingPropertyException("service.port"))));
         log.info("Successfully started javalin web service");
     }
 
-    private Javalin createJavalinService() {
-        return Javalin.create()
-                .events(serverStartingSteps())
-                .events(serviceStartedEvent())
-                .routes(routes())
-                .updateConfig(setupRequestAuditEvent())
-                .updateConfig(metrics());
+    private void createJavalinService() {
+        try {
+            ServiceProperties.init("service.properties", "build.properties");
+            ServiceMetricRegistry.init();
+            ServiceEventHandler.init();
+            FitnessDataDB.init();
+            service = Javalin.create((javalinConfig -> {
+                        javalinConfig.plugins.register(ServiceMetricRegistry.getMicrometerPlugin());
+                        javalinConfig.requestLogger.http(setupRequestAuditEvent());
+                    }))
+                    .events(serviceStartedEvent())
+                    .routes(routes())
+                    .exception(DocumentNotFoundException.class, documentNotFoundHandler());
+        } catch (Exception e) {
+            log.error("Issue during startup", e);
+            System.exit(1);
+        }
     }
 
-    private Consumer<JavalinConfig> metrics() {
-        log.info("Setting up metrics");
-        return (javalinConfig -> {
-            javalinConfig.plugins.register(ServiceMetrics.getMicrometerPlugin());
-        });
+    private ExceptionHandler<? super DocumentNotFoundException> documentNotFoundHandler() {
+        return (e, ctx) -> {
+            ctx.json(e.getMessage());
+            ctx.status(HttpStatus.NOT_FOUND);
+        };
     }
 
-    private Consumer<JavalinConfig> setupRequestAuditEvent() {
+    private RequestLogger setupRequestAuditEvent() {
         log.info("Setting up request audit event");
-        return (javalinConfig -> javalinConfig.requestLogger.http((ctx, ms) -> {
+        return (ctx, ms) -> {
             String requestPath = ctx.endpointHandlerPath();
             HttpStatus httpStatus = ctx.status();
             HandlerType method = ctx.method();
@@ -69,22 +85,8 @@ public class JavalinService {
             } else {
                 response = ctx.result();
             }
-            ServiceEventHandler.addEvent(new Audit(requestPath, String.valueOf(httpStatus.getCode()), method.toString(), response, ms));
-        }));
-    }
-
-    private Consumer<EventListener> serverStartingSteps() {
-        log.info("Setting up server starting steps");
-        return (eventListener -> eventListener.serverStarting(() -> {
-            try {
-                startServiceTime = System.currentTimeMillis();
-                ServiceEventHandler.init();
-                FitnessDataDB.init();
-            } catch (Exception e) {
-                log.error("Issue during startup", e);
-                System.exit(1);
-            }
-        }));
+            ServiceEventHandler.addEvent(new Audit(requestPath, String.valueOf(httpStatus.getCode()), method.toString(), response, ms, Span.current().getSpanContext().getTraceId()));
+        };
     }
 
     private Consumer<EventListener> serviceStartedEvent() {
@@ -94,9 +96,10 @@ public class JavalinService {
             try {
                 String buildVersion = ServiceProperties.getProperty("service.version").orElseThrow(() -> new MissingPropertyException("service.version"));
                 String gitBranch = ServiceProperties.getProperty("git.branch").orElseThrow(() -> new MissingPropertyException("git.branch"));
-                String gitCommitId = ServiceProperties.getProperty("git.commit.id").orElseThrow(() -> new MissingPropertyException("git.commit.id"));
+                String gitCommitId = ServiceProperties.getProperty("git.commit.id.abbrev").orElseThrow(() -> new MissingPropertyException("git.commit.id.abbrev"));
+                String javaVersion = ServiceProperties.getProperty("process.runtime.version").orElseThrow(() -> new MissingPropertyException("process.runtime.version"));
                 long startTime = ManagementFactory.getRuntimeMXBean().getStartTime();
-                ServiceEventHandler.addEvent(new ServiceStart(buildVersion, gitBranch, gitCommitId, startTime, serviceStartDuration));
+                ServiceEventHandler.addEvent(new ServiceStart(buildVersion, gitBranch, gitCommitId, startTime, serviceInitDuration, serviceStartDuration, javaVersion));
             } catch (MissingPropertyException missingPropertyException) {
                 log.error("Not able to add ServiceStart event", missingPropertyException);
             }

@@ -1,17 +1,17 @@
 package com.davgeoand.api;
 
 import com.davgeoand.api.exception.MissingPropertyException;
+import io.micrometer.core.instrument.ImmutableTag;
+import io.micrometer.core.instrument.Tag;
 import io.opentelemetry.instrumentation.resources.*;
 import io.opentelemetry.sdk.autoconfigure.ResourceConfiguration;
 import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -20,6 +20,12 @@ import java.util.regex.Pattern;
 public class ServiceProperties {
     private static Properties properties;
     private static final Pattern propertyPattern = Pattern.compile("\\[\\[.*::.*\\]\\]");
+
+    @Getter
+    static Map<String, String> commonAttributesMap = new HashMap<>();
+    @Getter
+    static Map<String, String> infoPropertiesMap = new HashMap<>();
+
 
     public static void init(String... files) {
         log.info("Initializing service properties");
@@ -58,6 +64,8 @@ public class ServiceProperties {
         });
 
         assessProperties();
+        setCommonAttributesMap();
+        setInfoPropertiesMap();
         log.info("Successfully initialized service properties");
     }
 
@@ -86,23 +94,23 @@ public class ServiceProperties {
         return Optional.ofNullable(properties.getProperty(property));
     }
 
-    public static Map<String, String> getCommonAttributesMap() {
-        log.info("Retrieving common attributes as a map");
-        Map<String, String> commonAttributesMap = new HashMap<>();
+    private static void setCommonAttributesMap() {
+        log.info("Setting common attributes as a map");
         String commonAttributesProperty = "service.common.attributes";
         String[] commonAttributes = getProperty(commonAttributesProperty)
                 .orElseThrow(() -> new MissingPropertyException(commonAttributesProperty))
                 .split(",");
         for (String attribute : commonAttributes) {
-            commonAttributesMap.put(attribute, getProperty(attribute).orElseThrow(() -> new MissingPropertyException(attribute)));
+            getProperty(attribute).ifPresentOrElse(
+                    (attr) -> commonAttributesMap.put(attribute, attr),
+                    () -> log.warn(attribute + " is not available")
+            );
         }
-        log.info("Successfully retrieved common attributes as a map");
-        return commonAttributesMap;
+        log.info("Successfully set common attributes as a map");
     }
 
-    public static Map<String, String> getInfoPropertiesMap() {
-        log.info("Retrieving info properties as a map");
-        Map<String, String> infoPropertiesMap = new HashMap<>();
+    private static void setInfoPropertiesMap() {
+        log.info("Setting info properties as a map");
         String infoPropertiesProperty = "service.info.properties";
         String[] infoProperties = getProperty(infoPropertiesProperty)
                 .orElseThrow(() -> new MissingPropertyException(infoPropertiesProperty))
@@ -110,9 +118,14 @@ public class ServiceProperties {
         for (String infoProperty : infoProperties) {
             infoPropertiesMap.put(infoProperty, getProperty(infoProperty).orElseThrow(() -> new MissingPropertyException(infoProperty)));
         }
-        infoPropertiesMap.putAll(getCommonAttributesMap());
-        log.info("Successfully retrieved info properties as a map");
-        return infoPropertiesMap;
+        infoPropertiesMap.putAll(commonAttributesMap);
+        log.info("Successfully set info properties as a map");
+    }
+
+    public static Iterable<Tag> getCommonAttributeTags() {
+        ArrayList<Tag> tagsIterable = new ArrayList<>();
+        commonAttributesMap.forEach((key, value) -> tagsIterable.add(new ImmutableTag(key, value)));
+        return tagsIterable;
     }
 }
 

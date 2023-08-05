@@ -14,7 +14,9 @@ public class ServiceStart extends Event {
     private String gitBranch;
     private String gitCommitId;
     private long startTime;
+    private long serviceInitDuration;
     private long serviceStartDuration;
+    private String javaVersion;
 
     @Override
     public Point toPoint() {
@@ -23,7 +25,9 @@ public class ServiceStart extends Event {
                 .addField("gitBranch", gitBranch)
                 .addField("gitCommitId", gitCommitId)
                 .addField("startTime", startTime)
+                .addField("serviceInitDuration", serviceInitDuration)
                 .addField("serviceStartDuration", serviceStartDuration)
+                .addField("javaVersion", javaVersion)
                 .time(time, WritePrecision.MS);
     }
 }

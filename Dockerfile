@@ -5,4 +5,4 @@ ADD ./target/lib lib
 
 EXPOSE 10000
 
-CMD java $JAVA_OPTS -jar fitness-service.jar
+CMD java $JAVA_OPTS -Dlogback.configurationFile=logbackConfig.xml -jar fitness-service.jar

@@ -19,6 +19,7 @@
         <otel.version>1.28.0</otel.version>
         <influxdb.version>6.9.0</influxdb.version>
         <arangodb.version>7.1.0</arangodb.version>
+        <micrometer.version>1.10.1</micrometer.version>
     </properties>
 
     <dependencies>
@@ -26,8 +27,20 @@
         <!-- https://mvnrepository.com/artifact/io.javalin/javalin-bundle -->
         <dependency>
             <groupId>io.javalin</groupId>
-            <artifactId>javalin-bundle</artifactId>
+            <artifactId>javalin</artifactId>
             <version>${javalin.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/io.javalin/javalin-micrometer -->
+        <dependency>
+            <groupId>io.javalin</groupId>
+            <artifactId>javalin-micrometer</artifactId>
+            <version>${javalin.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/ch.qos.logback/logback-classic -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.4.7</version>
         </dependency>
 
         <!-- tools -->
@@ -74,6 +87,14 @@
             <artifactId>arangodb-java-driver</artifactId>
             <version>${arangodb.version}</version>
         </dependency>
+
+        <!-- metric monitoring -->
+        <!-- https://mvnrepository.com/artifact/io.micrometer/micrometer-registry-influx -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-influx</artifactId>
+            <version>${micrometer.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -118,7 +139,7 @@
                     <failOnNoGitDirectory>false</failOnNoGitDirectory>
                     <includeOnlyProperties>
                         <includeOnlyProperty>git.branch</includeOnlyProperty>
-                        <includeOnlyProperty>git.commit.id</includeOnlyProperty>
+                        <includeOnlyProperty>git.commit.id.abbrev</includeOnlyProperty>
                     </includeOnlyProperties>
                 </configuration>
             </plugin>
